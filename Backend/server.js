@@ -29,7 +29,7 @@ app.use(cors({
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/password', passwordRoutes); 
-app.use('/api/profile', profileRoutes);  
+app.use('/api/profile', profileRoutes);
 
 
 // Test route
