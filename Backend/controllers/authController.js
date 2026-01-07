@@ -59,6 +59,7 @@ export const register = async (req, res) => {
         phones: user.phones,
         address: user.address,
         role: user.role,
+         profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {
@@ -118,6 +119,7 @@ export const login = async (req, res) => {
         phones: user.phones,
         address: user.address,
         role: user.role,
+         profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {
@@ -161,6 +163,7 @@ export const getProfile = async (req, res) => {
         phones: user.phones,
         address: user.address,
         role: user.role,
+        profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {

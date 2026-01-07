@@ -12,10 +12,15 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.2",
+    "country-state-city": "^3.2.1",
+    "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-dropzone": "^14.3.8",
+    "react-easy-crop": "^5.5.6",
     "react-router-dom": "^7.11.0",
+    "react-select": "^5.10.2",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {

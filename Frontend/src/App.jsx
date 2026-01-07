@@ -8,6 +8,7 @@ import ResetPassword from './components/Auth/ResetPassword';
 import UserTable from './components/Users/UserTable';
 import Profile from './components/Users/Profile';
 import ChangePassword from './components/Users/ChangePassword';
+import CompleteProfile from './components/CompleteProfile/CompleteProfile';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -78,6 +79,16 @@ function App() {
           element={
             <ProtectedRoute>
               <ChangePassword />
+            </ProtectedRoute>
+          }
+        />
+
+          {/* Complete Profile Route */}
+        <Route
+          path="/complete-profile"
+          element={
+            <ProtectedRoute>
+              <CompleteProfile/>
             </ProtectedRoute>
           }
         />

@@ -1,0 +1,192 @@
+import jsPDF from 'jspdf';
+
+export const generateProfilePDF = async (formData) => {
+  const doc = new jsPDF();
+  
+  // Page dimensions
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  
+  // Colors
+  const primaryColor = [37, 99, 235]; // Blue
+  const secondaryColor = [107, 114, 128]; // Gray
+  const accentColor = [16, 185, 129]; // Green
+  
+  // Header Background
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, pageWidth, 60, 'F');
+  
+  // Title
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(28);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Profile Summary', pageWidth / 2, 25, { align: 'center' });
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Complete Profile Information', pageWidth / 2, 35, { align: 'center' });
+  
+  // Add date
+  doc.setFontSize(10);
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, pageWidth / 2, 45, { align: 'center' });
+  
+  let yPosition = 75;
+  
+  // Add Photo (if exists)
+  if (formData.photoPreview) {
+    try {
+      // Convert blob to base64
+      const photoBase64 = await blobToBase64(formData.photo);
+      
+      // Add photo (centered, circular effect with border)
+      const imgSize = 50;
+      const imgX = (pageWidth - imgSize) / 2;
+      
+      // Photo border/frame
+      doc.setFillColor(255, 255, 255);
+      doc.circle(imgX + imgSize/2, yPosition + imgSize/2, imgSize/2 + 2, 'F');
+      
+      doc.addImage(photoBase64, 'JPEG', imgX, yPosition, imgSize, imgSize);
+      
+      yPosition += imgSize + 20;
+    } catch (error) {
+      console.error('Error adding photo to PDF:', error);
+      yPosition += 10;
+    }
+  }
+  
+  // Section: Personal Information
+  doc.setFontSize(16);
+  doc.setTextColor(...primaryColor);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Personal Information', 20, yPosition);
+  yPosition += 3;
+  
+  // Underline
+  doc.setDrawColor(...primaryColor);
+  doc.setLineWidth(0.5);
+  doc.line(20, yPosition, 80, yPosition);
+  yPosition += 12;
+  
+  // Personal details
+  doc.setFontSize(11);
+  doc.setTextColor(...secondaryColor);
+  doc.setFont('helvetica', 'normal');
+  
+  const addField = (label, value) => {
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${label}:`, 25, yPosition);
+    doc.setFont('helvetica', 'normal');
+    doc.text(value || 'N/A', 70, yPosition);
+    yPosition += 8;
+  };
+  
+  addField('Full Name', formData.name);
+  addField('Date of Birth', formData.dob ? new Date(formData.dob).toLocaleDateString() : 'N/A');
+  
+  // Calculate age
+  if (formData.dob) {
+    const today = new Date();
+    const birthDate = new Date(formData.dob);
+    const age = today.getFullYear() - birthDate.getFullYear();
+    addField('Age', `${age} years`);
+  }
+  
+  yPosition += 5;
+  
+  // Section: Location
+  doc.setFontSize(16);
+  doc.setTextColor(...primaryColor);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Location', 20, yPosition);
+  yPosition += 3;
+  
+  doc.setDrawColor(...primaryColor);
+  doc.line(20, yPosition, 60, yPosition);
+  yPosition += 12;
+  
+  doc.setFontSize(11);
+  doc.setTextColor(...secondaryColor);
+  
+  addField('Country', formData.country?.label);
+  addField('State/Region', formData.state?.label);
+  
+  yPosition += 5;
+  
+  // Section: Interests
+  doc.setFontSize(16);
+  doc.setTextColor(...primaryColor);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Interests & Hobbies', 20, yPosition);
+  yPosition += 3;
+  
+  doc.setDrawColor(...primaryColor);
+  doc.line(20, yPosition, 75, yPosition);
+  yPosition += 12;
+  
+  if (formData.interests && formData.interests.length > 0) {
+    doc.setFontSize(11);
+    doc.setTextColor(...secondaryColor);
+    doc.setFont('helvetica', 'normal');
+    
+    // Display interests as tags/badges
+    const interests = formData.interests.map(i => i.label);
+    let xPos = 25;
+    let lineHeight = yPosition;
+    
+    interests.forEach((interest, index) => {
+      const textWidth = doc.getTextWidth(interest);
+      const badgeWidth = textWidth + 8;
+      
+      // Check if we need to wrap to next line
+      if (xPos + badgeWidth > pageWidth - 20) {
+        xPos = 25;
+        lineHeight += 12;
+      }
+      
+      // Draw badge background
+      doc.setFillColor(...accentColor);
+      doc.roundedRect(xPos, lineHeight - 5, badgeWidth, 8, 2, 2, 'F');
+      
+      // Draw text
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.text(interest, xPos + 4, lineHeight);
+      
+      xPos += badgeWidth + 5;
+    });
+    
+    yPosition = lineHeight + 15;
+  } else {
+    doc.setFontSize(11);
+    doc.setTextColor(...secondaryColor);
+    doc.text('No interests specified', 25, yPosition);
+    yPosition += 15;
+  }
+  
+  // Footer
+  const footerY = pageHeight - 20;
+  doc.setFontSize(9);
+  doc.setTextColor(150, 150, 150);
+  doc.setFont('helvetica', 'italic');
+  doc.text('This document was auto-generated by User Management System', pageWidth / 2, footerY, { align: 'center' });
+  
+  // Add decorative border
+  doc.setDrawColor(...primaryColor);
+  doc.setLineWidth(1);
+  doc.rect(10, 65, pageWidth - 20, pageHeight - 80, 'S');
+  
+  // Save PDF
+  const fileName = `${formData.name.replace(/\s+/g, '_')}_Profile_${new Date().getTime()}.pdf`;
+  doc.save(fileName);
+};
+
+// Helper function to convert Blob to Base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};

@@ -15,7 +15,11 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const { data } = await api.get('/auth/profile');
-      setUser(data.user);
+      setUser(prev => ({
+  ...prev,
+  ...data.user
+}));
+
     } catch (error) {
       setUser(null);
     } finally {

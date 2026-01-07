@@ -1,5 +1,5 @@
 import * as brevo from '@getbrevo/brevo';
-
+import 'dotenv/config';
 const apiInstance = new brevo.TransactionalEmailsApi();
 apiInstance.setApiKey(
   brevo.TransactionalEmailsApiApiKeys.apiKey,

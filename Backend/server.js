@@ -1,6 +1,6 @@
-import express from 'express';
-dotenv.config({ path: './.env' });
 import dotenv from 'dotenv';
+dotenv.config({ path: './.env' });
+import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import connectDB from './config/db.js';
@@ -15,18 +15,12 @@ connectDB();
 const app = express();
 
 
-console.log("ENV CHECK:", {
-  BREVO_API_KEY: process.env.BREVO_API_KEY,
-  BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL
-});
-
-
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL,
   credentials: true
 }));
 
