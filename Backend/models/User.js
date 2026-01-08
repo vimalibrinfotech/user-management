@@ -25,7 +25,10 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: function() {
+        // Password required only if not Google auth
+        return !this.googleId;
+      },
       minlength: [8, 'Password must be at least 8 characters']
     },
     phones: {
@@ -40,8 +43,7 @@ const userSchema = new mongoose.Schema(
     },
     address: {
       type: String,
-      required: [true, 'Address is required'],
-      minlength: [10, 'Address must be at least 10 characters']
+      default: 'Not provided'
     },
     role: {
       type: String,
@@ -49,8 +51,19 @@ const userSchema = new mongoose.Schema(
       default: 'user'
     },
     profilePhoto: {
-      type: String, // Cloudinary URL
+      type: String,
       default: null
+    },
+    // Google OAuth fields
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true // Allows null values, unique only when exists
+    },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google'],
+      default: 'local'
     },
     // Password Reset Fields
     passwordResetOTP: {
@@ -67,9 +80,14 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash password before saving
+// Hash password before saving (only for local auth)
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
+    return next();
+  }
+  
+  // Skip hashing for Google users (they don't have real password)
+  if (this.authProvider === 'google') {
     return next();
   }
   

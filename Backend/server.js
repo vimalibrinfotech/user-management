@@ -5,7 +5,10 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import session from 'express-session';
 import connectDB from './config/db.js';
+import { configurePassport } from './config/passport.js';
+import passportInstance from './config/passport.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import passwordRoutes from './routes/password.js'; 
@@ -40,6 +43,19 @@ app.use(cors({
 
 // Make io accessible in routes/controllers
 app.set('io', io);
+
+// Session middleware (required for Passport)
+app.use(session({
+  secret: process.env.JWT_SECRET,
+  resave: false,
+  saveUninitialized: false
+}));
+
+// Initialize Passport
+configurePassport();
+app.use(passportInstance.initialize());
+app.use(passportInstance.session());
+
 
 // Routes
 app.use('/api/auth', authRoutes);
