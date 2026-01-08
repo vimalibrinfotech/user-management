@@ -32,6 +32,15 @@ const Navbar = () => {
               >
                 Profile
               </Link>
+              
+              {/* NEW: Messages/Chat Link */}
+              <Link
+                to="/chat"
+                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md"
+              >
+                Messages
+              </Link>
+              
               {user.role === 'admin' && (
                 <Link
                   to="/users"

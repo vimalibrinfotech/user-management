@@ -1,14 +1,15 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
-import Navbar from './components/Common/Navbar';
-import Login from './components/Auth/Login';
-import Register from './components/Auth/Register';
-import ForgotPassword from './components/Auth/ForgotPassword';
-import ResetPassword from './components/Auth/ResetPassword';
-import UserTable from './components/Users/UserTable';
-import Profile from './components/Users/Profile';
-import ChangePassword from './components/Users/ChangePassword';
-import CompleteProfile from './components/CompleteProfile/CompleteProfile';
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import Navbar from "./components/Common/Navbar";
+import Login from "./components/Auth/Login";
+import Register from "./components/Auth/Register";
+import ForgotPassword from "./components/Auth/ForgotPassword";
+import ResetPassword from "./components/Auth/ResetPassword";
+import UserTable from "./components/Users/UserTable";
+import Profile from "./components/Users/Profile";
+import ChangePassword from "./components/Users/ChangePassword";
+import CompleteProfile from "./components/CompleteProfile/CompleteProfile";
+import ChatPage from "./components/Chat/ChatPage";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -37,7 +38,7 @@ const AdminRoute = ({ children }) => {
     );
   }
 
-  return user && user.role === 'admin' ? children : <Navigate to="/profile" />;
+  return user && user.role === "admin" ? children : <Navigate to="/profile" />;
 };
 
 function App() {
@@ -48,21 +49,21 @@ function App() {
       <Navbar />
       <Routes>
         {/* Public Routes */}
-        <Route 
-          path="/login" 
-          element={user ? <Navigate to="/profile" /> : <Login />} 
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/profile" /> : <Login />}
         />
-        <Route 
-          path="/register" 
-          element={user ? <Navigate to="/profile" /> : <Register />} 
+        <Route
+          path="/register"
+          element={user ? <Navigate to="/profile" /> : <Register />}
         />
-        <Route 
-          path="/forgot-password" 
-          element={user ? <Navigate to="/profile" /> : <ForgotPassword />} 
+        <Route
+          path="/forgot-password"
+          element={user ? <Navigate to="/profile" /> : <ForgotPassword />}
         />
-        <Route 
-          path="/reset-password" 
-          element={user ? <Navigate to="/profile" /> : <ResetPassword />} 
+        <Route
+          path="/reset-password"
+          element={user ? <Navigate to="/profile" /> : <ResetPassword />}
         />
 
         {/* Protected Routes */}
@@ -83,12 +84,21 @@ function App() {
           }
         />
 
-          {/* Complete Profile Route */}
+        {/* Complete Profile Route */}
         <Route
           path="/complete-profile"
           element={
             <ProtectedRoute>
-              <CompleteProfile/>
+              <CompleteProfile />
+            </ProtectedRoute>
+          }
+        />
+
+         <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage/>
             </ProtectedRoute>
           }
         />
@@ -102,6 +112,8 @@ function App() {
             </AdminRoute>
           }
         />
+
+       
 
         {/* Default Route */}
         <Route path="/" element={<Navigate to="/profile" />} />
