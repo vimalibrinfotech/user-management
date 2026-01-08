@@ -10,6 +10,11 @@ import Profile from "./components/Users/Profile";
 import ChangePassword from "./components/Users/ChangePassword";
 import CompleteProfile from "./components/CompleteProfile/CompleteProfile";
 import ChatPage from "./components/Chat/ChatPage";
+import PaymentSuccess from "./components/Payment/PaymentSuccess";
+import PaymentCancel from "./components/Payment/PaymentCancel";
+import PaymentSelection from "./components/Payment/PaymentSelection";
+import ProductsList from "./components/Products/ProductsList";
+import ProductDetail from "./components/Products/ProductDetail";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -66,6 +71,10 @@ function App() {
           element={user ? <Navigate to="/profile" /> : <ResetPassword />}
         />
 
+         {/* Products Routes - Public */}
+        <Route path="/products" element={<ProductsList />} />
+        <Route path="/products/:id" element={<ProductDetail />} />
+
         {/* Protected Routes */}
         <Route
           path="/profile"
@@ -102,6 +111,18 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+          {/* Payment Routes */}
+        <Route
+          path="/payment"
+          element={
+            <ProtectedRoute>
+              <PaymentSelection />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/payment/success" element={<PaymentSuccess />} />
+        <Route path="/payment/cancel" element={<PaymentCancel />} />
 
         {/* Admin Routes */}
         <Route

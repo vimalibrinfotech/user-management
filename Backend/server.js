@@ -14,6 +14,8 @@ import userRoutes from './routes/users.js';
 import passwordRoutes from './routes/password.js'; 
 import profileRoutes from './routes/profile.js';
 import chatRoutes from './routes/chat.js';
+import paymentRoutes from './routes/payment.js';
+import productRoutes from './routes/products.js';
 
 // Connect to database
 connectDB();
@@ -63,6 +65,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/password', passwordRoutes); 
 app.use('/api/profile', profileRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/products', productRoutes);
 
 // Test route
 app.get('/', (req, res) => {
