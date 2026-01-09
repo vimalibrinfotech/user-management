@@ -40,6 +40,7 @@ const ChatWindow = ({ conversation, currentUser }) => {
         
         // Mark as read if not sent by current user
         if (message.sender._id !== currentUser.id) {
+          console.log('📖 Marking message as read:', message._id);
           markMessageAsRead(message._id);
         }
       }
@@ -86,6 +87,14 @@ const ChatWindow = ({ conversation, currentUser }) => {
       setLoading(true);
       const { data } = await api.get(`/chat/conversations/${conversation._id}/messages`);
       setMessages(data.messages);
+      
+      // Mark unread messages as read
+      data.messages.forEach(message => {
+        if (message.sender._id !== currentUser.id && !message.readBy.some(r => r.user === currentUser.id)) {
+          console.log('📖 Marking loaded message as read:', message._id);
+          markMessageAsRead(message._id);
+        }
+      });
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -95,6 +104,7 @@ const ChatWindow = ({ conversation, currentUser }) => {
 
   const markMessageAsRead = async (messageId) => {
     try {
+      console.log('📖 Marking message as read:', messageId);
       await api.patch(`/chat/messages/${messageId}/read`);
     } catch (error) {
       console.error('Error marking message as read:', error);
@@ -131,16 +141,11 @@ const ChatWindow = ({ conversation, currentUser }) => {
   const getOtherParticipant = () => {
     if (conversation.isGroup) return null;
     
-    // Debug logging
-    console.log('Current user ID:', currentUser.id);
-    console.log('Participants:', conversation.participants);
-    
     // Convert both IDs to string for proper comparison
     const otherParticipant = conversation.participants.find(
       p => p._id.toString() !== currentUser.id.toString()
     );
     
-    console.log('Other participant:', otherParticipant);
     return otherParticipant;
   };
 
@@ -157,11 +162,33 @@ const ChatWindow = ({ conversation, currentUser }) => {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-white border-b border-gray-300 p-4 flex items-center">
-        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-          {conversation.isGroup
-            ? conversation.groupName.charAt(0).toUpperCase()
-            : otherUser?.firstName?.charAt(0).toUpperCase() || 'U'}
-        </div>
+        {conversation.isGroup ? (
+          <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+            {conversation.groupName.charAt(0).toUpperCase()}
+          </div>
+        ) : (
+          <>
+            {otherUser?.profilePhoto ? (
+              <img 
+                src={otherUser.profilePhoto} 
+                alt={otherUser.firstName}
+                className="w-10 h-10 rounded-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextElementSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            
+            {/* Fallback initials for ChatWindow header */}
+            <div 
+              className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold"
+              style={{ display: otherUser?.profilePhoto ? 'none' : 'flex' }}
+            >
+              {otherUser?.firstName?.charAt(0).toUpperCase() || 'U'}
+            </div>
+          </>
+        )}
         <div className="ml-3">
           <h3 className="font-semibold text-gray-900">
             {conversation.isGroup
@@ -181,7 +208,7 @@ const ChatWindow = ({ conversation, currentUser }) => {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-50">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-gray-500">Loading messages...</div>

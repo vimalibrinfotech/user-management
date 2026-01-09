@@ -2,6 +2,7 @@ import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import Order from '../models/Order.js';
+import Product from '../models/Product.js';
 
 // Initialize payment gateways
 const razorpay = new Razorpay({

@@ -96,17 +96,43 @@ const ChatPage = () => {
 
   const handleConversationSelect = (conversation) => {
     setSelectedConversation(conversation);
-    // Clear unread count for this conversation
+    // Clear unread count for this conversation immediately (optimistic update)
     setUnreadCounts(prev => ({
       ...prev,
       [conversation._id]: 0
     }));
+    // Refetch to sync with backend
+    setTimeout(() => fetchUnreadCounts(), 1000);
   };
 
   const handleNewConversation = (newConversation) => {
     setConversations(prev => [newConversation, ...prev]);
     setSelectedConversation(newConversation);
     setShowNewChatModal(false);
+  };
+
+  const handleDeleteConversation = async (conversationId) => {
+    try {
+      if (!window.confirm('Delete this conversation? This action cannot be undone.')) {
+        return;
+      }
+
+      // Call backend API to delete conversation
+      await api.delete(`/chat/conversations/${conversationId}`);
+
+      // Remove from UI
+      setConversations(prev => prev.filter(conv => conv._id !== conversationId));
+
+      // If deleted conversation was selected, clear selection
+      if (selectedConversation?._id === conversationId) {
+        setSelectedConversation(null);
+      }
+
+      console.log('Conversation deleted successfully');
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('Failed to delete conversation');
+    }
   };
 
   return (
@@ -132,6 +158,7 @@ const ChatPage = () => {
           loading={loading}
           currentUser={user}
           unreadCounts={unreadCounts}
+          onDeleteConversation={handleDeleteConversation}
         />
       </div>
 
