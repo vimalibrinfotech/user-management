@@ -19,13 +19,14 @@ import ProductDetail from "./components/Products/ProductDetail";
 import ProductManagement from "./components/Products/ProductManagement";
 
 // Payment Components
-import PaymentSelection from "./components/Payment/PaymentSelection";
+import PaymentSelection from "./components/Products/PaymentSelection";
 import PaymentSuccess from "./components/Payment/PaymentSuccess";
 import PaymentCancel from "./components/Payment/PaymentCancel";
 
 // Other Components
 import CompleteProfile from "./components/CompleteProfile/CompleteProfile";
 import ChatPage from "./components/Chat/ChatPage";
+
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {

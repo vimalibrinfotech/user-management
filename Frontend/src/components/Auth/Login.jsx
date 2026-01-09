@@ -43,7 +43,7 @@ const Login = () => {
 
   // Google Sign-In Handler
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:8000/api/auth/google';
+    window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/google`;
   };
 
   return (

@@ -11,18 +11,31 @@ const ProductDetail = () => {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    fetchProduct();
+    if (id) {
+      fetchProduct();
+    } else {
+      setError('Invalid product ID');
+      setLoading(false);
+    }
   }, [id]);
 
   const fetchProduct = async () => {
     try {
+      setLoading(true);
+      setError('');
       const { data } = await api.get(`/products/${id}`);
+      
+      if (!data.product) {
+        throw new Error('Product not found');
+      }
+      
       setProduct(data.product);
     } catch (err) {
-      setError('Product not found');
-      console.error(err);
+      console.error('Fetch product error:', err);
+      setError(err.response?.data?.message || 'Product not found');
     } finally {
       setLoading(false);
     }
@@ -30,27 +43,58 @@ const ProductDetail = () => {
 
   const handleBuyNow = () => {
     if (!user) {
-      navigate('/login');
+      // Redirect to login with return URL
+      navigate('/login', { state: { from: `/products/${id}` } });
       return;
     }
+
+    // Check if product is available
+    if (!product.isActive) {
+      setError('This product is currently unavailable');
+      return;
+    }
+
+    if (product.stock === 0) {
+      setError('This product is out of stock');
+      return;
+    }
+
+    // Navigate to payment with product data
     navigate('/payment', { state: { product } });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-xl text-gray-600">Loading...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-xl text-gray-600">Loading product...</div>
+        </div>
       </div>
     );
   }
 
   if (error || !product) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-xl text-red-600 mb-4">{error}</p>
-          <Link to="/products" className="text-blue-600 hover:text-blue-700">
-            ← Back to Products
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+            <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-xl text-red-600 mb-4 font-semibold">{error}</p>
+          <p className="text-gray-600 mb-6">
+            The product you're looking for might have been removed or is temporarily unavailable.
+          </p>
+          <Link 
+            to="/products" 
+            className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Products
           </Link>
         </div>
       </div>
@@ -61,21 +105,31 @@ const ProductDetail = () => {
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
         {/* Breadcrumb */}
-        <div className="mb-6">
-          <Link to="/products" className="text-blue-600 hover:text-blue-700">
-            ← Back to Products
-          </Link>
-        </div>
+        <nav className="mb-6" aria-label="Breadcrumb">
+          <ol className="flex items-center space-x-2 text-sm">
+            <li>
+              <Link to="/products" className="text-blue-600 hover:text-blue-700 hover:underline">
+                Products
+              </Link>
+            </li>
+            <li className="text-gray-400">/</li>
+            <li className="text-gray-600 truncate max-w-md">
+              {product.name}
+            </li>
+          </ol>
+        </nav>
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-8">
             {/* Product Image */}
             <div>
-              {product.image ? (
+              {product.image && !imageError ? (
                 <img
                   src={product.image}
                   alt={product.name}
+                  loading="lazy"
                   className="w-full h-96 object-cover rounded-lg"
+                  onError={() => setImageError(true)}
                 />
               ) : (
                 <div className="w-full h-96 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center">
@@ -97,6 +151,19 @@ const ProductDetail = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-4">
                 {product.name}
               </h1>
+
+              {/* Stock Status */}
+              {!product.isActive && (
+                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded">
+                  This product is currently unavailable
+                </div>
+              )}
+              
+              {product.stock === 0 && product.isActive && (
+                <div className="mb-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 rounded">
+                  Out of stock
+                </div>
+              )}
 
               {/* Description */}
               <p className="text-gray-600 mb-6 leading-relaxed">
@@ -140,9 +207,10 @@ const ProductDetail = () => {
               {/* Buy Button */}
               <button
                 onClick={handleBuyNow}
-                className="w-full py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-lg"
+                disabled={!product.isActive || product.stock === 0}
+                className="w-full py-3 px-6 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition text-lg disabled:bg-gray-300 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
-                Buy Now
+                {!user ? 'Login to Buy' : product.stock === 0 ? 'Out of Stock' : !product.isActive ? 'Unavailable' : 'Buy Now'}
               </button>
 
               {/* Security Info */}
