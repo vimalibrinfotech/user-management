@@ -57,7 +57,7 @@ export const createRazorpayOrder = async (req, res) => {
       });
     }
 
-    // ISSUE 6 FIX: Check for duplicate order with idempotency key
+    // Check for duplicate order with idempotency key
     if (idempotencyKey) {
       const existingOrder = await Order.findOne({
         userId: req.user._id,
@@ -229,7 +229,7 @@ export const verifyRazorpayPayment = async (req, res) => {
       order.paymentId = razorpay_payment_id;
       await order.save({ session });
 
-      // ISSUE 1 FIX: Atomic stock decrement with transaction
+      // Atomic stock decrement with transaction
       if (order.productId && order.productId.toString() !== 'undefined') {
         const product = await Product.findOneAndUpdate(
           { 
@@ -287,7 +287,7 @@ export const verifyRazorpayPayment = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     
-    // ISSUE 4 FIX: Don't log sensitive data
+    // Don't log sensitive data
     console.error('Payment verification error:', {
       message: error.message,
       orderId: req.body.dbOrderId
@@ -325,7 +325,7 @@ export const createStripeCheckout = async (req, res) => {
       });
     }
 
-    // ISSUE 6 FIX: Check for duplicate order
+    //  Check for duplicate order
     if (idempotencyKey) {
       const existingOrder = await Order.findOne({
         userId: req.user._id,
@@ -429,7 +429,7 @@ export const createStripeCheckout = async (req, res) => {
       dbOrderId: order._id
     });
   } catch (error) {
-    // ISSUE 4 FIX: Don't log sensitive data
+    // Don't log sensitive data
     console.error('Stripe checkout error:', {
       message: error.message,
       type: error.type
@@ -446,7 +446,7 @@ export const createStripeCheckout = async (req, res) => {
 // @route   POST /api/payment/stripe/verify
 // @access  Private
 export const verifyStripePayment = async (req, res) => {
-  // ISSUE 2 FIX: Use MongoDB session for transaction
+  // Use MongoDB session for transaction
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -501,7 +501,7 @@ export const verifyStripePayment = async (req, res) => {
       order.status = 'completed';
       await order.save({ session });
 
-      // ISSUE 1 FIX: Atomic stock decrement with transaction
+      // Atomic stock decrement with transaction
       if (order.productId) {
         const product = await Product.findOneAndUpdate(
           { 
@@ -552,7 +552,7 @@ export const verifyStripePayment = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     
-    // ISSUE 4 FIX: Don't log sensitive data
+    // Don't log sensitive data
     console.error('Stripe verification error:', {
       message: error.message,
       type: error.type
@@ -567,7 +567,7 @@ export const verifyStripePayment = async (req, res) => {
   }
 };
 
-// ISSUE 3 FIX: Stripe webhook handler
+// Stripe webhook handler
 // @desc    Handle Stripe webhooks
 // @route   POST /api/payment/stripe/webhook
 // @access  Public (but verified with signature)
@@ -691,7 +691,7 @@ export const getUserOrders = async (req, res) => {
       orders: ordersWithData
     });
   } catch (error) {
-    // ISSUE 4 FIX: Don't log sensitive data
+    // Don't log sensitive data
     console.error('Get orders error:', {
       message: error.message
     });
