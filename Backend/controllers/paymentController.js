@@ -1,6 +1,7 @@
 import Razorpay from 'razorpay';
 import Stripe from 'stripe';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 
@@ -46,7 +47,7 @@ export const createRazorpayOrder = async (req, res) => {
       });
     }
 
-    const { amount, productId } = req.body;
+    const { amount, productId, idempotencyKey } = req.body;
 
     // Validation
     if (!productId) {
@@ -54,6 +55,34 @@ export const createRazorpayOrder = async (req, res) => {
         success: false,
         message: 'Product ID is required'
       });
+    }
+
+    // ISSUE 6 FIX: Check for duplicate order with idempotency key
+    if (idempotencyKey) {
+      const existingOrder = await Order.findOne({
+        userId: req.user._id,
+        receipt: idempotencyKey,
+        status: { $in: ['created', 'pending', 'completed'] }
+      });
+
+      if (existingOrder) {
+        console.info('Returning existing order for idempotency key:', {
+          orderId: existingOrder.orderId,
+          userId: req.user._id
+        });
+
+        return res.status(200).json({
+          success: true,
+          order: {
+            id: existingOrder.orderId,
+            amount: existingOrder.amount * 100,
+            currency: existingOrder.currency,
+            key: process.env.RAZORPAY_KEY_ID
+          },
+          dbOrderId: existingOrder._id,
+          fromCache: true
+        });
+      }
     }
 
     // Get product details
@@ -89,10 +118,11 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     // Create order in Razorpay
+    const receiptId = idempotencyKey || `rcpt_${Date.now().toString().slice(-10)}`;
     const options = {
       amount: amount * 100, // Convert to paise
       currency: 'INR',
-      receipt: `receipt_${Date.now()}_${req.user._id}`
+      receipt: receiptId
     };
 
     const razorpayOrder = await razorpay.orders.create(options);
@@ -109,7 +139,7 @@ export const createRazorpayOrder = async (req, res) => {
       status: 'created',
       productName: product.name,
       productDescription: product.description,
-      receipt: options.receipt
+      receipt: receiptId
     });
 
     res.status(200).json({
@@ -123,7 +153,13 @@ export const createRazorpayOrder = async (req, res) => {
       dbOrderId: order._id
     });
   } catch (error) {
-    console.error('Razorpay order creation error:', error);
+    // ISSUE 4 FIX: Don't log sensitive data
+    console.error('Razorpay order creation error:', {
+      message: error.message,
+      code: error.error?.code,
+      reason: error.error?.reason
+    });
+    
     res.status(500).json({
       success: false,
       message: error.error?.description || error.message || 'Failed to create order'
@@ -135,11 +171,16 @@ export const createRazorpayOrder = async (req, res) => {
 // @route   POST /api/payment/razorpay/verify
 // @access  Private
 export const verifyRazorpayPayment = async (req, res) => {
+  // ISSUE 2 FIX: Use MongoDB session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, dbOrderId } = req.body;
 
     // Validation
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !dbOrderId) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Missing required payment details'
@@ -147,8 +188,9 @@ export const verifyRazorpayPayment = async (req, res) => {
     }
 
     // Check if order exists
-    const order = await Order.findById(dbOrderId);
+    const order = await Order.findById(dbOrderId).session(session);
     if (!order) {
+      await session.abortTransaction();
       return res.status(404).json({
         success: false,
         message: 'Order not found'
@@ -157,6 +199,7 @@ export const verifyRazorpayPayment = async (req, res) => {
 
     // Check if order already processed
     if (order.status === 'completed') {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Order already processed'
@@ -165,6 +208,7 @@ export const verifyRazorpayPayment = async (req, res) => {
 
     // Verify user authorization
     if (order.userId.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
       return res.status(403).json({
         success: false,
         message: 'Unauthorized access to order'
@@ -183,19 +227,42 @@ export const verifyRazorpayPayment = async (req, res) => {
       // Update order status
       order.status = 'completed';
       order.paymentId = razorpay_payment_id;
-      await order.save();
+      await order.save({ session });
 
-      // Update product stock if applicable
-      if (order.productId) {
-        const product = await Product.findById(order.productId);
-        if (product && product.stock !== -1) {
-          product.stock -= 1;
-          if (product.stock === 0) {
-            product.isActive = false; // Auto-deactivate when out of stock
+      // ISSUE 1 FIX: Atomic stock decrement with transaction
+      if (order.productId && order.productId.toString() !== 'undefined') {
+        const product = await Product.findOneAndUpdate(
+          { 
+            _id: order.productId,
+            $or: [
+              { stock: -1 }, // Unlimited stock
+              { stock: { $gt: 0 } } // Stock available
+            ]
+          },
+          { 
+            $inc: { stock: -1 } // Atomic decrement
+          },
+          { 
+            new: true,
+            session 
           }
-          await product.save();
+        );
+
+        if (!product) {
+          // Stock was depleted during payment
+          console.warn('Stock depleted during payment processing:', {
+            productId: order.productId,
+            orderId: order.orderId
+          });
+        } else if (product.stock === 0) {
+          // Auto-deactivate when stock hits zero
+          product.isActive = false;
+          await product.save({ session });
         }
       }
+
+      // Commit transaction
+      await session.commitTransaction();
 
       return res.status(200).json({
         success: true,
@@ -208,7 +275,9 @@ export const verifyRazorpayPayment = async (req, res) => {
     } else {
       // Invalid signature - mark as failed
       order.status = 'failed';
-      await order.save();
+      await order.save({ session });
+      
+      await session.commitTransaction();
 
       return res.status(400).json({
         success: false,
@@ -216,11 +285,20 @@ export const verifyRazorpayPayment = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Payment verification error:', error);
+    await session.abortTransaction();
+    
+    // ISSUE 4 FIX: Don't log sensitive data
+    console.error('Payment verification error:', {
+      message: error.message,
+      orderId: req.body.dbOrderId
+    });
+    
     res.status(500).json({
       success: false,
-      message: error.message || 'Payment verification failed'
+      message: 'Payment verification failed'
     });
+  } finally {
+    session.endSession();
   }
 };
 
@@ -237,7 +315,7 @@ export const createStripeCheckout = async (req, res) => {
       });
     }
 
-    const { amount, productId } = req.body;
+    const { amount, productId, idempotencyKey } = req.body;
 
     // Validation
     if (!productId) {
@@ -245,6 +323,30 @@ export const createStripeCheckout = async (req, res) => {
         success: false,
         message: 'Product ID is required'
       });
+    }
+
+    // ISSUE 6 FIX: Check for duplicate order
+    if (idempotencyKey) {
+      const existingOrder = await Order.findOne({
+        userId: req.user._id,
+        receipt: idempotencyKey,
+        status: { $in: ['pending', 'completed'] }
+      });
+
+      if (existingOrder && existingOrder.paymentId) {
+        console.info('Returning existing Stripe session:', {
+          sessionId: existingOrder.paymentId,
+          userId: req.user._id
+        });
+
+        return res.status(200).json({
+          success: true,
+          sessionId: existingOrder.paymentId,
+          url: `${process.env.FRONTEND_URL}/payment/success?session_id=${existingOrder.paymentId}`,
+          dbOrderId: existingOrder._id,
+          fromCache: true
+        });
+      }
     }
 
     // Get and validate product
@@ -316,7 +418,8 @@ export const createStripeCheckout = async (req, res) => {
       orderId: session.id,
       status: 'pending',
       productName: product.name,
-      productDescription: product.description
+      productDescription: product.description,
+      receipt: idempotencyKey || `stripe_${Date.now()}`
     });
 
     res.status(200).json({
@@ -326,7 +429,12 @@ export const createStripeCheckout = async (req, res) => {
       dbOrderId: order._id
     });
   } catch (error) {
-    console.error('Stripe checkout error:', error);
+    // ISSUE 4 FIX: Don't log sensitive data
+    console.error('Stripe checkout error:', {
+      message: error.message,
+      type: error.type
+    });
+    
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to create checkout session'
@@ -338,8 +446,13 @@ export const createStripeCheckout = async (req, res) => {
 // @route   POST /api/payment/stripe/verify
 // @access  Private
 export const verifyStripePayment = async (req, res) => {
+  // ISSUE 2 FIX: Use MongoDB session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     if (!stripe) {
+      await session.abortTransaction();
       return res.status(503).json({
         success: false,
         message: 'Stripe payment gateway is not configured'
@@ -349,6 +462,7 @@ export const verifyStripePayment = async (req, res) => {
     const { sessionId } = req.body;
 
     if (!sessionId) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Session ID is required'
@@ -356,13 +470,14 @@ export const verifyStripePayment = async (req, res) => {
     }
 
     // Retrieve session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId);
 
-    if (session.payment_status === 'paid') {
+    if (stripeSession.payment_status === 'paid') {
       // Find and update order
-      const order = await Order.findOne({ paymentId: sessionId });
+      const order = await Order.findOne({ paymentId: sessionId }).session(session);
       
       if (!order) {
+        await session.abortTransaction();
         return res.status(404).json({
           success: false,
           message: 'Order not found'
@@ -371,6 +486,7 @@ export const verifyStripePayment = async (req, res) => {
 
       // Check if already processed
       if (order.status === 'completed') {
+        await session.abortTransaction();
         return res.status(200).json({
           success: true,
           message: 'Payment already verified',
@@ -383,19 +499,40 @@ export const verifyStripePayment = async (req, res) => {
 
       // Update order status
       order.status = 'completed';
-      await order.save();
+      await order.save({ session });
 
-      // Update product stock if applicable
+      // ISSUE 1 FIX: Atomic stock decrement with transaction
       if (order.productId) {
-        const product = await Product.findById(order.productId);
-        if (product && product.stock !== -1) {
-          product.stock -= 1;
-          if (product.stock === 0) {
-            product.isActive = false;
+        const product = await Product.findOneAndUpdate(
+          { 
+            _id: order.productId,
+            $or: [
+              { stock: -1 }, // Unlimited stock
+              { stock: { $gt: 0 } } // Stock available
+            ]
+          },
+          { 
+            $inc: { stock: -1 } // Atomic decrement
+          },
+          { 
+            new: true,
+            session 
           }
-          await product.save();
+        );
+
+        if (!product) {
+          console.warn('Stock depleted during Stripe payment:', {
+            productId: order.productId,
+            orderId: order.orderId
+          });
+        } else if (product.stock === 0) {
+          product.isActive = false;
+          await product.save({ session });
         }
       }
+
+      // Commit transaction
+      await session.commitTransaction();
 
       return res.status(200).json({
         success: true,
@@ -406,17 +543,126 @@ export const verifyStripePayment = async (req, res) => {
         }
       });
     } else {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: 'Payment not completed'
       });
     }
   } catch (error) {
-    console.error('Stripe verification error:', error);
+    await session.abortTransaction();
+    
+    // ISSUE 4 FIX: Don't log sensitive data
+    console.error('Stripe verification error:', {
+      message: error.message,
+      type: error.type
+    });
+    
     res.status(500).json({
       success: false,
-      message: error.message || 'Payment verification failed'
+      message: 'Payment verification failed'
     });
+  } finally {
+    session.endSession();
+  }
+};
+
+// ISSUE 3 FIX: Stripe webhook handler
+// @desc    Handle Stripe webhooks
+// @route   POST /api/payment/stripe/webhook
+// @access  Public (but verified with signature)
+export const handleStripeWebhook = async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('Stripe webhook secret not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      webhookSecret
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed:', {
+      message: err.message
+    });
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        
+        // Update order
+        const order = await Order.findOne({ paymentId: session.id });
+        
+        if (order && order.status !== 'completed') {
+          const mongoSession = await mongoose.startSession();
+          mongoSession.startTransaction();
+
+          try {
+            order.status = 'completed';
+            await order.save({ session: mongoSession });
+
+            // Update stock atomically
+            if (order.productId) {
+              const product = await Product.findOneAndUpdate(
+                { 
+                  _id: order.productId,
+                  $or: [{ stock: -1 }, { stock: { $gt: 0 } }]
+                },
+                { $inc: { stock: -1 } },
+                { new: true, session: mongoSession }
+              );
+
+              if (product && product.stock === 0) {
+                product.isActive = false;
+                await product.save({ session: mongoSession });
+              }
+            }
+
+            await mongoSession.commitTransaction();
+            mongoSession.endSession();
+
+            console.info('Webhook processed successfully:', {
+              orderId: order.orderId,
+              sessionId: session.id
+            });
+          } catch (error) {
+            await mongoSession.abortTransaction();
+            mongoSession.endSession();
+            throw error;
+          }
+        }
+        break;
+
+      case 'checkout.session.expired':
+        const expiredSession = event.data.object;
+        await Order.findOneAndUpdate(
+          { paymentId: expiredSession.id },
+          { status: 'failed' }
+        );
+        break;
+
+      default:
+        console.log(`Unhandled webhook event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook processing error:', {
+      message: error.message,
+      eventType: event.type
+    });
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 };
 
@@ -426,19 +672,33 @@ export const verifyStripePayment = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.user._id })
-      .populate('productId', 'name image category')
-      .sort({ createdAt: -1 });
+      .populate('productId', 'name image category price priceUSD')
+      .sort({ createdAt: -1 })
+      .lean(); // Use lean() for better performance
+
+    // Ensure all required fields are present
+    const ordersWithData = orders.map(order => ({
+      ...order,
+      amount: order.amount || 0,
+      currency: order.currency || 'INR',
+      productName: order.productName || 'Unknown Product',
+      status: order.status || 'unknown'
+    }));
 
     res.status(200).json({
       success: true,
-      orders
+      count: ordersWithData.length,
+      orders: ordersWithData
     });
   } catch (error) {
-    console.error('Get orders error:', error);
+    // ISSUE 4 FIX: Don't log sensitive data
+    console.error('Get orders error:', {
+      message: error.message
+    });
+    
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to fetch orders'
+      message: 'Failed to fetch orders'
     });
   }
 };
-

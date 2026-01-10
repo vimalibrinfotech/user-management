@@ -43,6 +43,14 @@ const Navbar = () => {
                 Profile
               </Link>
               
+              {/* Orders Link */}
+              <Link
+                to="/payment/orders"
+                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md"
+              >
+                My Orders
+              </Link>
+              
               {/* Chat Link */}
               <Link
                 to="/chat"
@@ -90,7 +98,7 @@ const Navbar = () => {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md"
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition"
                 >
                   Logout
                 </button>

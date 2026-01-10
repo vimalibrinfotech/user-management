@@ -26,7 +26,7 @@ import PaymentCancel from "./components/Payment/PaymentCancel";
 // Other Components
 import CompleteProfile from "./components/CompleteProfile/CompleteProfile";
 import ChatPage from "./components/Chat/ChatPage";
-
+import Orders from "./components/Payment/Orders";
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -55,7 +55,7 @@ const AdminRoute = ({ children }) => {
     );
   }
 
-  return user && user.role === 'admin' ? children : <Navigate to="/profile" />;
+  return user && user.role === "admin" ? children : <Navigate to="/profile" />;
 };
 
 function App() {
@@ -66,21 +66,21 @@ function App() {
       <Navbar />
       <Routes>
         {/* Public Routes */}
-        <Route 
-          path="/login" 
-          element={user ? <Navigate to="/profile" /> : <Login />} 
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/profile" /> : <Login />}
         />
-        <Route 
-          path="/register" 
-          element={user ? <Navigate to="/profile" /> : <Register />} 
+        <Route
+          path="/register"
+          element={user ? <Navigate to="/profile" /> : <Register />}
         />
-        <Route 
-          path="/forgot-password" 
-          element={user ? <Navigate to="/profile" /> : <ForgotPassword />} 
+        <Route
+          path="/forgot-password"
+          element={user ? <Navigate to="/profile" /> : <ForgotPassword />}
         />
-        <Route 
-          path="/reset-password" 
-          element={user ? <Navigate to="/profile" /> : <ResetPassword />} 
+        <Route
+          path="/reset-password"
+          element={user ? <Navigate to="/profile" /> : <ResetPassword />}
         />
 
         {/* Products Routes - Public */}
@@ -131,6 +131,15 @@ function App() {
           element={
             <ProtectedRoute>
               <ChatPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/payment/orders"
+          element={
+            <ProtectedRoute>
+              <Orders />
             </ProtectedRoute>
           }
         />
